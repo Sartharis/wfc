@@ -47,6 +47,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <chrono>
 
 #include <configuru.hpp>
 #include <emilib/irange.hpp>
@@ -653,6 +654,8 @@ bool TileModel::propagate(Output* output) const
 		for (int y2 = 0; y2 < _height; ++y2) {
 			for (int d = 0; d < 4; ++d) {
 				int x1 = x2, y1 = y2;
+				
+				// Grab coordinates for given neighbor (periodic assumes pattern repeats over border)
 				if (d == 0) {
 					if (x2 == 0) {
 						if (!_periodic_out) { continue; }
@@ -683,16 +686,22 @@ bool TileModel::propagate(Output* output) const
 					}
 				}
 
+				// If neighbor tile didn't change, skip it
 				if (!output->_changes.get(x1, y1)) { continue; }
 
 				for (int t2 = 0; t2 < _num_patterns; ++t2) {
+					// if a pattern in our cell is still possible...
 					if (output->_wave.get(x2, y2, t2)) {
+						
+						// ... check if the pattern is still valid for some possible pattern in neighbor ...
 						bool b = false;
 						for (int t1 = 0; t1 < _num_patterns && !b; ++t1) {
 							if (output->_wave.get(x1, y1, t1)) {
 								b = _propagator.get(d, t1, t2);
 							}
 						}
+
+						// ... if not, mark that pattern as impossible
 						if (!b) {
 							output->_wave.set(x2, y2, t2, false);
 							output->_changes.set(x2, y2, true);
@@ -846,6 +855,7 @@ Result find_lowest_entropy(const Model& model, const Output& output, RandomDoubl
 
 	double min = std::numeric_limits<double>::infinity();
 
+	// Iterate over every cell
 	for (int x = 0; x < model._width; ++x) {
 		for (int y = 0; y < model._height; ++y) {
 			if (model.on_boundary(x, y)) { continue; }
@@ -853,6 +863,7 @@ Result find_lowest_entropy(const Model& model, const Output& output, RandomDoubl
 			size_t num_superimposed = 0;
 			double entropy = 0;
 
+			//Get total entropy from the number of weighted possibilities
 			for (int t = 0; t < model._num_patterns; ++t) {
 				if (output._wave.get(x, y, t)) {
 					num_superimposed += 1;
@@ -860,6 +871,7 @@ Result find_lowest_entropy(const Model& model, const Output& output, RandomDoubl
 				}
 			}
 
+			// If entropy is 0 / no options available, it means we reached an impossible state
 			if (entropy == 0 || num_superimposed == 0) {
 				return Result::kFail;
 			}
@@ -890,17 +902,24 @@ Result find_lowest_entropy(const Model& model, const Output& output, RandomDoubl
 Result observe(const Model& model, Output* output, RandomDouble& random_double)
 {
 	int argminx, argminy;
+
+	// Try to find the cell with lowest possible choices for pattern
 	const auto result = find_lowest_entropy(model, *output, random_double, &argminx, &argminy);
 	if (result != Result::kUnfinished) { return result; }
 
+	// Create a probability distribution from all the possible patterns in the given cell
 	std::vector<double> distribution(model._num_patterns);
 	for (int t = 0; t < model._num_patterns; ++t) {
 		distribution[t] = output->_wave.get(argminx, argminy, t) ? model._pattern_weight[t] : 0;
 	}
+
+	// Grab a random weighted pattern and choose a single pattern to use (i.e. collapse the cell)
 	size_t r = spin_the_bottle(std::move(distribution), random_double());
 	for (int t = 0; t < model._num_patterns; ++t) {
 		output->_wave.set(argminx, argminy, t, t == r);
 	}
+
+	// Mark the collapsed cell as changed for propagation purposes
 	output->_changes.set(argminx, argminy, true);
 
 	return Result::kUnfinished;
@@ -951,10 +970,20 @@ Result run(Output* output, const Model& model, size_t seed, size_t limit, jo_gif
 	std::mt19937 gen(seed);
 	std::uniform_real_distribution<double> dis(0.0, 1.0);
 	RandomDouble random_double = [&]() { return dis(gen); };
+	double avg_observation = 0.0;
+	double avg_propagation = 0.0;
 
+	// Run until we finish or reach an iterattion limit
 	for (size_t l = 0; l < limit || limit == 0; ++l) {
-		Result result = observe(model, output, random_double);
 
+		// Collapse a single cell
+		std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+		Result result = observe(model, output, random_double);
+  		std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+  		std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1);
+		avg_observation = (avg_observation * (double)l + time_span.count()) / ((double)(l+1));
+		
+		// Grab a frame for making a gif 
 		if (gif_out && l % kGifInterval == 0) {
 			const auto image = model.image(*output);
 			jo_gif_frame(gif_out, (uint8_t*)image.data(), kGifDelayCentiSec, kGifSeparatePalette);
@@ -974,11 +1003,19 @@ Result run(Output* output, const Model& model, size_t seed, size_t limit, jo_gif
 					}
 				}
 			}
-
+			LOG_F(INFO, "%f to observe on average", avg_observation);
+			LOG_F(INFO, "%f to propagate on average", avg_propagation);
 			LOG_F(INFO, "%s after %lu iterations", result2str(result), l);
 			return result;
 		}
+
+		// Keep propagating changes until stable (all the changed tiles affected all their neighbors)
+		t1 = std::chrono::high_resolution_clock::now();
 		while (model.propagate(output));
+		t2 = std::chrono::high_resolution_clock::now();
+  		time_span = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1);
+		avg_propagation = (avg_propagation * (double)l + time_span.count()) / ((double)(l+1));
+		
 	}
 
 	LOG_F(INFO, "Unfinished after %lu iterations", limit);
@@ -1006,7 +1043,11 @@ void run_and_write(const Options& options, const std::string& name, const config
 				gif = jo_gif_start(gif_path.c_str(), initial_image.width(), initial_image.height(), 0, gif_palette_size);
 			}
 
+			std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 			const auto result = run(&output, model, seed, limit, options.export_gif ? &gif : nullptr);
+			std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+  			std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1);
+			LOG_F(INFO, "%f to do all iterations", time_span.count());
 
 			if (options.export_gif) {
 				jo_gif_end(&gif);
@@ -1119,7 +1160,7 @@ int main(int argc, char* argv[])
 	}
 
 	if (files.empty()) {
-		files.push_back("samples.cfg");
+		files.push_back("samples_test.cfg");
 	}
 
 	for (const auto& file : files) {
