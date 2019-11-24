@@ -7,19 +7,22 @@ SHELL := bash
 	.SHELLFLAGS := -eu -o pipefail -c
 	.DEFAULT_GOAL := all
 
-# C++14 compiler
+# C++17 compiler
 ENABLE="source /opt/rh/devtoolset-8/enable"
 CXX=g++
 CPPFLAGS=--std=c++17 -Wall -Wno-sign-compare -O2 -g -DNDEBUG
 LDLIBS=-lstdc++ -lpthread -ldl
-OBJECTS=""
+OBJECTS=
 
 FILES:=$(shell echo *.cpp)
 
 # Only execute `all` rule if any file in $(FILES) have changed
 all: $(FILES)
-	git submodule update --init --recursive
-	mkdir -p build
+	@echo "Updating submodule..."
+	@git submodule update --init --recursive
+	@echo "Creating build and output directories..."
+	@mkdir -p build
+	@mkdir -p output
 	@for src_path in $(FILES); do \
 		obj_path="build/$${src_path%.cpp}.o" ; \
 		OBJECTS+=" $$obj_path" ; \
@@ -31,13 +34,8 @@ all: $(FILES)
 		fi \
 	done
 	@echo "Linking..."
-	$(CXX) $(CPPFLAGS) $(OBJECTS) $(LDLIBS) -o wfc.bin
+	$(CXX) $(CPPFLAGS) $(LDLIBS) -o main build/libs.o build/main.o
 	@echo "Done."
-
-# Run it:
-# mkdir -p output
-# ./wfc.bin $@
-# exit
 
 # make clean will clear the build dir
 clean:
