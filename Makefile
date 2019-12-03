@@ -10,20 +10,20 @@ SHELL := bash
 # C++17 compiler
 ENABLE="source /opt/rh/devtoolset-8/enable"
 CXX=g++ -m64
-CXXFLAGS=--std=c++17 -Wall -Wno-sign-compare -Wno-misleading-indentation -O3 -g -DNDEBUG 
+CXXFLAGS=--std=c++14 -Wall -Wno-sign-compare -Wno-misleading-indentation -O3 -g -DNDEBUG 
 LDFLAGS=-lstdc++ -lpthread -ldl
 LDLIBS=-I libs -I libs/emilib 
 
 CC_FILES := main.cpp libs.cpp
 OBJDIR=build
-OBJS=$(OBJDIR)/main.o $(OBJDIR)/libs.o
+OBJS=$(OBJDIR)/main.o $(OBJDIR)/libs.o $(OBJDIR)/par_wfc.o
 
 EXECUTABLE := main
 
 ################################################################################
 # Stuff to enable CUDA compiling
 
-CU_FILES := parallel_wfc.cu
+CU_FILES := par_wfc.cu
 CU_DEPS :=
 
 ARCH=$(shell uname | sed -e 's/-.*//g')
@@ -36,20 +36,20 @@ LIBS += GL glut cudart
 
 ifneq ($(wildcard /opt/cuda-8.0/.*),)
 # Latedays cluster
-LDFLAGS=-L/opt/cuda-8.0/lib64/ -lcudart
+LDFLAGS+=-L/opt/cuda-8.0/lib64/ -lcudart
 else
 # GHC cluster
-LDFLAGS=-L/usr/local/depot/cuda-8.0/lib64/ -lcudart
+LDFLAGS+=-L/usr/local/depot/cuda-8.0/lib64/ -lcudart
 endif
 
-LDLIBS  := $(addprefix -l, $(LIBS))
+LDLIBS+= $(addprefix -l, $(LIBS))
 LDFRAMEWORKS := $(addprefix -framework , $(FRAMEWORKS))
 
 NVCC=nvcc
 
 ################################################################################
 
-# Only execute `all` rule if any file in $(EXECTUABLE) have changed
+# Only execute `all` rule if any file in $(EXECUTABLE) have changed
 all: $(EXECUTABLE)
 	
 dirs:
@@ -61,14 +61,14 @@ dirs:
 
 $(EXECUTABLE): dirs $(OBJS)
 	@echo "Linking..."
-	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDFLAGS) $(LDLIBS) $(LDFRAMEWORKS)
 	@echo "Done."
 
 $(OBJDIR)/%.o: %.cpp
 	$(CXX) $< $(CXXFLAGS) $(LDLIBS) -c -o $@
 
 $(OBJDIR)/%.o: %.cu
-	$(NVCC) $< $(NVCCFLAGS) -c -o $@
+	$(NVCC) $< $(NVCCFLAGS) $(LDLIBS) -c -o $@
 
 # make clean will clear the build and output dir
 clean:
