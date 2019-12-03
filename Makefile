@@ -10,35 +10,38 @@ SHELL := bash
 # C++17 compiler
 ENABLE="source /opt/rh/devtoolset-8/enable"
 CXX=g++
-CPPFLAGS=--std=c++17 -Wall -Wno-sign-compare -O2 -g -DNDEBUG
-LDLIBS=-lstdc++ -lpthread -ldl
-OBJECTS=
+CXXFLAGS=--std=c++17 -Wall -Wno-sign-compare -Wno-misleading-indentation -O3 -g -DNDEBUG 
+LDFLAGS=-lstdc++ -lpthread -ldl
+LDLIBS=-I libs -I libs/emilib 
+CC_FILES=main.cpp libs.cpp
+OBJDIR=build
+OBJS=$(OBJDIR)/main.o $(OBJDIR)/libs.o
 
 FILES:=$(shell echo *.cpp)
+EXECUTABLE:=main
 
-# Only execute `all` rule if any file in $(FILES) have changed
-all: $(FILES)
+# Only execute `all` rule if any file in $(EXECTUABLE) have changed
+all: $(EXECUTABLE)
+	
+dirs:
 	@echo "Updating submodule..."
 	@git submodule update --init --recursive
 	@echo "Creating build and output directories..."
-	@mkdir -p build
 	@mkdir -p output
-	@for src_path in $(FILES); do \
-		obj_path="build/$${src_path%.cpp}.o" ; \
-		OBJECTS+=" $$obj_path" ; \
-		if [ ! -f $$obj_path ] || [ $$obj_path -ot $$src_path ]; then \
-			echo "Compiling $$src_path to $$obj_path..." ; \
-			$(CXX) $(CPPFLAGS) \
-				-I libs -I libs/emilib \
-				-c $$src_path -o $$obj_path ; \
-		fi \
-	done
+	@mkdir -p $(OBJDIR)/
+
+$(EXECUTABLE): dirs $(OBJS)
 	@echo "Linking..."
-	$(CXX) $(CPPFLAGS) $(LDLIBS) -o main build/libs.o build/main.o
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 	@echo "Done."
 
-# make clean will clear the build dir
+$(OBJDIR)/%.o: %.cpp
+	$(CXX) $< $(CXXFLAGS) $(LDLIBS) -c -o $@
+
+
+# make clean will clear the build and output dir
 clean:
 	rm -rf build
+	rm -rf output
 
-.PHONY: all clean
+.PHONY: all dirs clean
