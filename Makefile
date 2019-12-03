@@ -9,16 +9,45 @@ SHELL := bash
 
 # C++17 compiler
 ENABLE="source /opt/rh/devtoolset-8/enable"
-CXX=g++
+CXX=g++ -m64
 CXXFLAGS=--std=c++17 -Wall -Wno-sign-compare -Wno-misleading-indentation -O3 -g -DNDEBUG 
 LDFLAGS=-lstdc++ -lpthread -ldl
 LDLIBS=-I libs -I libs/emilib 
-CC_FILES=main.cpp libs.cpp
+
+CC_FILES := main.cpp libs.cpp
 OBJDIR=build
 OBJS=$(OBJDIR)/main.o $(OBJDIR)/libs.o
 
-FILES:=$(shell echo *.cpp)
-EXECUTABLE:=main
+EXECUTABLE := main
+
+################################################################################
+# Stuff to enable CUDA compiling
+
+CU_FILES := parallel_wfc.cu
+CU_DEPS :=
+
+ARCH=$(shell uname | sed -e 's/-.*//g')
+HOSTNAME=$(shell hostname)
+LIBS :=
+FRAMEWORKS :=
+
+NVCCFLAGS=-O3 -m64 --gpu-architecture compute_35
+LIBS += GL glut cudart
+
+ifneq ($(wildcard /opt/cuda-8.0/.*),)
+# Latedays cluster
+LDFLAGS=-L/opt/cuda-8.0/lib64/ -lcudart
+else
+# GHC cluster
+LDFLAGS=-L/usr/local/depot/cuda-8.0/lib64/ -lcudart
+endif
+
+LDLIBS  := $(addprefix -l, $(LIBS))
+LDFRAMEWORKS := $(addprefix -framework , $(FRAMEWORKS))
+
+NVCC=nvcc
+
+################################################################################
 
 # Only execute `all` rule if any file in $(EXECTUABLE) have changed
 all: $(EXECUTABLE)
@@ -38,6 +67,8 @@ $(EXECUTABLE): dirs $(OBJS)
 $(OBJDIR)/%.o: %.cpp
 	$(CXX) $< $(CXXFLAGS) $(LDLIBS) -c -o $@
 
+$(OBJDIR)/%.o: %.cu
+	$(NVCC) $< $(NVCCFLAGS) -c -o $@
 
 # make clean will clear the build and output dir
 clean:
