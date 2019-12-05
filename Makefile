@@ -16,14 +16,14 @@ LDLIBS=-I libs -I libs/emilib
 
 CC_FILES := main.cpp libs.cpp
 OBJDIR=build
-OBJS=$(OBJDIR)/main.o $(OBJDIR)/libs.o $(OBJDIR)/par_wfc.o
+OBJS=$(OBJDIR)/main.o $(OBJDIR)/libs.o $(OBJDIR)/parTiledModel.o $(OBJDIR)/parResult.o
 
 EXECUTABLE := main
 
 ################################################################################
 # Stuff to enable CUDA compiling
 
-CU_FILES := par_wfc.cu
+CU_FILES := parTiledModel.cu parResult.cu
 CU_DEPS :=
 
 ARCH=$(shell uname | sed -e 's/-.*//g')
@@ -49,10 +49,13 @@ NVCC=nvcc
 
 ################################################################################
 
+.PHONY: all dirs clean
+
 # Only execute `all` rule if any file in $(EXECUTABLE) have changed
 all: $(EXECUTABLE)
 	
 dirs:
+	@echo $(PATH)
 	@echo "Updating submodule..."
 	@git submodule update --init --recursive
 	@echo "Creating build and output directories..."
@@ -65,14 +68,14 @@ $(EXECUTABLE): dirs $(OBJS)
 	@echo "Done."
 
 $(OBJDIR)/%.o: %.cpp
-	$(CXX) $< $(CXXFLAGS) $(LDLIBS) -c -o $@
+	$(CXX) $< $(CXXFLAGS) -c -o $@
 
 $(OBJDIR)/%.o: %.cu
-	$(NVCC) $< $(NVCCFLAGS) $(LDLIBS) -c -o $@
+	$(NVCC) $< $(NVCCFLAGS) -c -o $@
 
 # make clean will clear the build and output dir
 clean:
 	rm -rf build
 	rm -rf output
 
-.PHONY: all dirs clean
+
