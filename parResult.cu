@@ -10,6 +10,7 @@
 #include <vector>
 #include <chrono>
 
+/*
 #include <configuru.hpp>
 #include <emilib/irange.hpp>
 #include <emilib/strprintf.hpp>
@@ -17,12 +18,11 @@
 #include <stb_image.h>
 #include <stb_image_write.h>
 
+
 #define JO_GIF_HEADER_FILE_ONLY
 #include <jo_gif.cpp>
-
+*/
 #include "arrays.hpp"
-
-#include <cuda.h>
 
 // ----------------------------------------------------------------------------
 

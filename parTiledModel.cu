@@ -22,35 +22,37 @@
 
 #include "arrays.hpp"
 
-#include <cuda.h>
-
 // ----------------------------------------------------------------------------
 
 __global__ void pixelDidChange(bool* didChange, const int imgWidth, 
         const int imgHeight) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int x2 = index % imgWidth;
+    int y2 = index / imgWidth;
     
-    for (int dir=0; d<4; d++) {
+    if (x2 >= imgWidth || y2 >= imgHeight) { return; }
+
+    for (int dir=0; dir<4; dir++) {
         // Grab coordinates for neighbor in direction `dir`
         int x1 = x2, y1 = y2;
 				
 		// Grab coordinates for given neighbor (periodic assumes pattern repeats over border)
-		if (d == 0) {
+		if (dir == 0) {
             if (x2 == 0) {
                 if (!_periodic_out) { continue; }
-                x1 = _width - 1;
+                x1 = imgWidth - 1;
             } else {
                 x1 = x2 - 1;
             }
-        } else if (d == 1) {
-            if (y2 == _height - 1) {
+        } else if (dir == 1) {
+            if (y2 == imgHeight - 1) {
                 if (!_periodic_out) { continue; }
                 y1 = 0;
             } else {
                 y1 = y2 + 1;
             }
-        } else if (d == 2) {
-            if (x2 == _width - 1) {
+        } else if (dir == 2) {
+            if (x2 == imgWidth - 1) {
                 if (!_periodic_out) { continue; }
                 x1 = 0;
             } else {
@@ -59,7 +61,7 @@ __global__ void pixelDidChange(bool* didChange, const int imgWidth,
         } else {
             if (y2 == 0) {
                 if (!_periodic_out) { continue; }
-                y1 = _height - 1;
+                y1 = imgHeight - 1;
             } else {
                 y1 = y2 - 1;
             }
@@ -84,7 +86,7 @@ __global__ void pixelDidChange(bool* didChange, const int imgWidth,
                 if (!b) {
                     output->_wave.set(x2, y2, t2, false);
                     output->_changes.set(x2, y2, true);
-                    did_change = true;
+                    didChange[index] = true;
                 }
             }
         }
@@ -92,19 +94,14 @@ __global__ void pixelDidChange(bool* didChange, const int imgWidth,
 }
 
 
-bool TileModel::propagate(Output* output) const
+bool* TileModel::propagate(Output* output) const
 {
-	bool did_change = false;
+    int gridSize = ;        // number of blocks in grid
+	int blockSize = 256;    // number of threads per block
+    bool* didChange = (bool*)malloc(sizeof(bool) * _width * _height);
 
-	/* for (int x2 = 0; x2 < _width; ++x2) {
-		for (int y2 = 0; y2 < _height; ++y2) {
-		
-        }
-	}
-    */
-    // TODO do didPixelChange kernel
-
-	return did_change;
+    pixelDidChange<<<gridSize, blockSize>>>(didChangeFlags, _width, _height);
+	return didChangeFlags;
 }
 
 Image TileModel::image(const Output& output) const
