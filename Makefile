@@ -7,14 +7,14 @@ SHELL := bash
 	.SHELLFLAGS := -eu -o pipefail -c
 	.DEFAULT_GOAL := all
 
-# C++17 compiler
+# C++ compiler
 ENABLE="source /opt/rh/devtoolset-8/enable"
 CXX=g++ -m64
 CXXFLAGS=-std=c++14 -Wall -Wno-sign-compare -Wno-misleading-indentation -O3 -g -DNDEBUG 
 LDFLAGS=-lstdc++ -lpthread -ldl
 LDLIBS=-I libs -I libs/emilib 
 
-CC_FILES := main.cpp libs.cpp
+CC_FILES := main.cpp libs.cpp parTiledModel.cpp parResult.cpp
 OBJDIR=build
 OBJS=$(OBJDIR)/main.o $(OBJDIR)/libs.o $(OBJDIR)/parTiledModel.o $(OBJDIR)/parResult.o
 
@@ -23,7 +23,7 @@ EXECUTABLE := main
 ################################################################################
 # Stuff to enable CUDA compiling
 
-CU_FILES := parTiledModel.cu parResult.cu
+# CU_FILES := parTiledModel.cu parResult.cu
 CU_DEPS :=
 
 ARCH=$(shell uname | sed -e 's/-.*//g')
@@ -64,14 +64,18 @@ dirs:
 
 $(EXECUTABLE): dirs $(OBJS)
 	@echo "Linking..."
-	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDFLAGS) $(LDLIBS) $(LDFRAMEWORKS)
+	#$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDFLAGS) $(LDLIBS) $(LDFRAMEWORKS)
+	$(NVCC) $(NVCCFLAGS) -o $@ $(OBJS) $(LDFLAGS) $(LDLIBS) $(LDFRAMEWORKS) 
 	@echo "Done."
 
 $(OBJDIR)/%.o: %.cpp
-	$(CXX) $< $(CXXFLAGS) -c -o $@
+	$(NVCC) -x cu -I. -dc $< $(NVCCFLAGS) $(LDLIBS) -c -o $@
 
-$(OBJDIR)/%.o: %.cu
-	$(NVCC) $< $(NVCCFLAGS) -c -o $@
+#$(OBJDIR)/%.o: %.cpp
+#	$(CXX) $< $(CXXFLAGS) -c -o $@
+
+#$(OBJDIR)/%.o: %.cu
+#	$(NVCC) $< $(NVCCFLAGS) -c -o $@
 
 # make clean will clear the build and output dir
 clean:
