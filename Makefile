@@ -10,7 +10,7 @@ SHELL := bash
 # C++17 compiler
 ENABLE="source /opt/rh/devtoolset-8/enable"
 CXX=g++
-CXXFLAGS=--std=c++17 -Wall -Wno-sign-compare -O3 -g -DNDEBUG
+CXXFLAGS=--std=c++17 -Wall -Wno-sign-compare -Wno-misleading-indentation -O3 -g -DNDEBUG
 LDFLAGS=-lstdc++ -lpthread -ldl
 LDLIBS=-I libs -I libs/emilib
 OBJDIR=build
