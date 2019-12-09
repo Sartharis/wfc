@@ -692,21 +692,19 @@ bool TileModel::propagate(Output* output, int startIndex) const
 		queue.push(y1 * _width + x1);
 	}
 
-#pragma omp parallel shared(busy_counter, queue)
+//#pragma omp parallel shared(busy_counter, queue)
 	{
-		do
-		{
+		//do
+		//{
 			//if(busy_counter > 0)LOG_F(INFO, "%d", int(busy_counter));
 			if(!queue.empty())
 			{
-				busy_counter++;
+				//busy_counter++;
 				int nextIndex = -1;
 				while(queue.pop(nextIndex))
 				{
 					int x2 = nextIndex % _width;
 					int y2 = nextIndex / _width;
-					//LOG_F(INFO, "x2=%d y2=%d", x2,y2);
-
 
 					bool has_changed = false;
 					for (int d = 0; d < 4; ++d) 
@@ -747,6 +745,30 @@ bool TileModel::propagate(Output* output, int startIndex) const
 						// If neighbor tile didn't change, skip it
 						if (!output->_changes.get(x1, y1)) { continue; }
 
+						/*for (int t2 = 0; t2 < _num_patterns; ++t2) 
+						{
+							// if a pattern in our cell is still possible...
+							if (output->_wave.get(x2, y2, t2)) {
+								
+								// ... check if the pattern is still valid for some possible pattern in neighbor ...
+								bool b = false;
+								for (int t1 = 0; t1 < _num_patterns && !b; ++t1) {
+									if (output->_wave.get(x1, y1, t1)) {
+										b = _propagator.get(d, t1, t2);
+									}
+								}
+
+								// ... if not, mark that pattern as impossible
+								if (!b) {
+									output->_wave.set(x2, y2, t2, false);
+									output->_changes.set(x2, y2, true);
+									has_changed = true;
+								}
+							}
+						}*/
+
+						//#pragma omp parallel
+						//#pragma omp for schedule(static, 1)
 						for (int t2 = 0; t2 < _num_patterns; ++t2) 
 						{
 							// if a pattern in our cell is still possible...
@@ -812,10 +834,10 @@ bool TileModel::propagate(Output* output, int startIndex) const
 					}
 				}
 
-				busy_counter--;
+				//busy_counter--;
 			}
 
-		} while(busy_counter > 0);
+		//} while(busy_counter > 0);
 	}
 	return false;
 }
@@ -1109,9 +1131,9 @@ Result run(Output* output, const Model& model, size_t seed, size_t limit, jo_gif
 					}
 				}
 			}
-			LOG_F(INFO, "%f to observe on average", avg_observation);
-			LOG_F(INFO, "%f to propagate on average", avg_propagation);
-			LOG_F(INFO, "%s after %lu iterations", result2str(result), l);
+			//LOG_F(INFO, "%f to observe on average", avg_observation);
+			//LOG_F(INFO, "%f to propagate on average", avg_propagation);
+			//LOG_F(INFO, "%s after %lu iterations", result2str(result), l);
 			return result;
 		}
 
