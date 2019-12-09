@@ -12,7 +12,7 @@ ENABLE="source /opt/rh/devtoolset-8/enable"
 CXX=g++ -m64
 CXXFLAGS=--std=c++17 -Wall -Wno-sign-compare -Wno-misleading-indentation -O3 -g -DNDEBUG
 LDFLAGS=-lstdc++ -lpthread -ldl -lm
-LDLIBS=-I libs -I libs/emilib -I build/
+LDLIBS=-I libs -I libs/emilib -Ibuild/
 
 ################################################################################
 # Extra stuff to support ISPC
@@ -26,7 +26,7 @@ OBJDIR=build
 OBJS=$(OBJDIR)/main.o $(OBJDIR)/libs.o $(OBJDIR)/main_ispc.o $(OBJDIR)/tasksys.o 
 
 # FILES:=$(shell echo *.cpp)
-EXECUTABLE:=main_ispc
+EXECUTABLE:=main
 
 .PHONY: all dirs clean
 
@@ -48,10 +48,10 @@ $(EXECUTABLE): dirs $(OBJS)
 $(OBJDIR)/%.o: %.cpp
 	$(CXX) $< $(CXXFLAGS) $(LDLIBS) -c -o $@
 
-$(OBJDIR)/%_ispc.h $(OBJDIR)//%_ispc.o: %.ispc
-	$(ISPC) $(ISPCFLAGS) $< -o $(OBJDIR)/$*_ispc.o -h $(OBJDIR)/$*_ispc.h
-
 $(OBJDIR)/main.o: $(OBJDIR)/main_ispc.h
+
+$(OBJDIR)/main_ispc.h $(OBJDIR)/main_ispc.o: main_ispc.ispc
+	$(ISPC) $(ISPCFLAGS) $< -h $(OBJDIR)/main_ispc.h -o $(OBJDIR)/main_ispc.o
 
 # make clean will clear the build dir
 clean:

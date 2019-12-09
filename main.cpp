@@ -609,12 +609,15 @@ TileModel::TileModel(const configuru::Config& config, std::string subset_name, i
 	}
 }
 
-extern void didChange_ispc(int width, int height, bool* didChange);
+using namespace ispc;
 
 bool TileModel::propagate(Output* output) const
 {
 	bool did_change = false;
-	didChange_ispc(_width, _height, &did_change);
+    Array3D<Bool> wave = output->_wave;
+    Array2D<Bool> changes = output->_changes;
+	didChange_ispc(_width, _height, &did_change, _num_patterns, _periodic_out, 
+            wave, changes, _propagator);
 	return did_change;
 }
 
