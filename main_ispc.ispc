@@ -1,3 +1,5 @@
+#include "arrays.hpp"
+
 
 export void didChange_ispc(uniform int _width, uniform int _height,
     uniform bool* did_change, uniform int _num_patterns,
