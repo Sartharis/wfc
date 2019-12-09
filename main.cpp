@@ -620,9 +620,10 @@ typedef struct {
 
 void* workerThreadStart(void* threadArgs) {
     WorkerArgs* args = static_cast<WorkerArgs*>(threadArgs);
-    // Interleaves the threads and the pixels they work on
     int numPixels = args->width * args->height;
-    for (int i=args->threadId; i<numPixels; i+=args->numThreads) {
+    int blockSize = numPixels / args->numThreads;
+    int nextBlock = (args->threadId + 1) * blockSize;
+    for (int i=args->threadId * blockSize; i<nextBlock && i<numPixels; i++) {
         int y2 = i / args->width;
         int x2 = i % args->width;
 
