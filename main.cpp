@@ -692,7 +692,7 @@ void* workerThreadStart(void* threadArgs) {
 bool TileModel::propagate(Output* output) const
 {
 	bool did_change = false;
-    int numThreads = 20;
+    int numThreads = 8;
     pthread_t workers[numThreads];
     WorkerArgs args[numThreads];
 
