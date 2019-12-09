@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <vector>
 #include <chrono>
+#include <pthread.h>
 
 #include <configuru.hpp>
 #include <emilib/irange.hpp>
@@ -607,72 +608,113 @@ TileModel::TileModel(const configuru::Config& config, std::string subset_name, i
 	}
 }
 
+/******************************************************************************/
+typedef struct {
+    Output* output;
+    Array3D<Bool> propagator;
+    bool* did_change;
+    int width, height, num_patterns;
+    int numThreads, threadId;
+    bool periodic_out;
+} WorkerArgs;
+
+void* workerThreadStart(void* threadArgs) {
+    WorkerArgs* args = static_cast<WorkerArgs*>(threadArgs);
+    // Interleaves the threads and the pixels they work on
+    int numPixels = args->width * args->height;
+    for (int i=args->threadId; i<numPixels; i+=args->numThreads) {
+        int y2 = i / args->width;
+        int x2 = i % args->width;
+
+        for (int d = 0; d < 4; ++d) {
+            int x1 = x2, y1 = y2;
+            
+            // Grab coordinates for given neighbor (periodic assumes pattern repeats over border)
+            if (d == 0) {
+                if (x2 == 0) {
+                    if (!args->periodic_out) { continue; }
+                    x1 = args->width - 1;
+                } else {
+                    x1 = x2 - 1;
+                }
+            } else if (d == 1) {
+                if (y2 == args->height - 1) {
+                    if (!args->periodic_out) { continue; }
+                    y1 = 0;
+                } else {
+                    y1 = y2 + 1;
+                }
+            } else if (d == 2) {
+                if (x2 == args->width - 1) {
+                    if (!args->periodic_out) { continue; }
+                    x1 = 0;
+                } else {
+                    x1 = x2 + 1;
+                }
+            } else {
+                if (y2 == 0) {
+                    if (!args->periodic_out) { continue; }
+                    y1 = args->height - 1;
+                } else {
+                    y1 = y2 - 1;
+                }
+            }
+            // If neighbor tile didn't change, skip it
+            if (!args->output->_changes.get(x1, y1)) { continue; }
+
+            for (int t2 = 0; t2 < args->num_patterns; ++t2) {
+                // if a pattern in our cell is still possible...
+                if (args->output->_wave.get(x2, y2, t2)) {
+                    
+                    // ... check if the pattern is still valid for some possible pattern in neighbor ...
+                    bool b = false;
+                    for (int t1 = 0; t1 < args->num_patterns && !b; ++t1) {
+                        if (args->output->_wave.get(x1, y1, t1)) {
+                            b = args->propagator.get(d, t1, t2);
+                        }
+                    }
+
+                    // ... if not, mark that pattern as impossible
+                    if (!b) {
+                        args->output->_wave.set(x2, y2, t2, false);
+                        args->output->_changes.set(x2, y2, true);
+                        *(args->did_change) = true;
+                    }
+                }
+            }
+        }
+    }
+    return NULL;
+} 
+
+/******************************************************************************/
+
 bool TileModel::propagate(Output* output) const
 {
 	bool did_change = false;
+    int numThreads = 20;
+    pthread_t workers[numThreads];
+    WorkerArgs args[numThreads];
 
-	for (int x2 = 0; x2 < _width; ++x2) {
-		for (int y2 = 0; y2 < _height; ++y2) {
-			for (int d = 0; d < 4; ++d) {
-				int x1 = x2, y1 = y2;
-				
-				// Grab coordinates for given neighbor (periodic assumes pattern repeats over border)
-				if (d == 0) {
-					if (x2 == 0) {
-						if (!_periodic_out) { continue; }
-						x1 = _width - 1;
-					} else {
-						x1 = x2 - 1;
-					}
-				} else if (d == 1) {
-					if (y2 == _height - 1) {
-						if (!_periodic_out) { continue; }
-						y1 = 0;
-					} else {
-						y1 = y2 + 1;
-					}
-				} else if (d == 2) {
-					if (x2 == _width - 1) {
-						if (!_periodic_out) { continue; }
-						x1 = 0;
-					} else {
-						x1 = x2 + 1;
-					}
-				} else {
-					if (y2 == 0) {
-						if (!_periodic_out) { continue; }
-						y1 = _height - 1;
-					} else {
-						y1 = y2 - 1;
-					}
-				}
+    for (int i=0; i<numThreads; i++) {
+        args[i].threadId = i;
+        args[i].output = output;
+        args[i].propagator = _propagator;
+        args[i].did_change = &did_change;
+        args[i].width = _width;
+        args[i].height = _height;
+        args[i].num_patterns = _num_patterns;
+        args[i].numThreads = numThreads;
+        args[i].periodic_out = _periodic_out;
+    }
+    for (int i=1; i<numThreads; i++) {
+        pthread_create(&workers[i], NULL, workerThreadStart, &args[i]);
+    }
+    workerThreadStart(&args[0]);
 
-				// If neighbor tile didn't change, skip it
-				if (!output->_changes.get(x1, y1)) { continue; }
-
-				for (int t2 = 0; t2 < _num_patterns; ++t2) {
-					// if a pattern in our cell is still possible...
-					if (output->_wave.get(x2, y2, t2)) {
-						
-						// ... check if the pattern is still valid for some possible pattern in neighbor ...
-						bool b = false;
-						for (int t1 = 0; t1 < _num_patterns && !b; ++t1) {
-							if (output->_wave.get(x1, y1, t1)) {
-								b = _propagator.get(d, t1, t2);
-							}
-						}
-
-						// ... if not, mark that pattern as impossible
-						if (!b) {
-							output->_wave.set(x2, y2, t2, false);
-							output->_changes.set(x2, y2, true);
-							did_change = true;
-						}
-					}
-				}
-			}
-		}
-	}
+    for (int i=1; i<numThreads; i++) {
+        pthread_join(workers[i], NULL);
+    }
 
 	return did_change;
 }
